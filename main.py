@@ -28,16 +28,16 @@ def main():
     print("\n" + "=" * 40)
     print("완료 요약")
     print("=" * 40)
-    result_path = "data/processed/result.csv"
-    if os.path.exists(result_path):
-        df = pd.read_csv(result_path, encoding="utf-8-sig")
-        print(f"총 수집: {len(df)}건")
-        print(f"플랫폼별:\n{df['platform'].value_counts().to_string()}")
-        print(f"유형별:\n{df['rumor_type'].value_counts().sort_index().to_string()}")
-        print(f"위험도별:\n{df['risk_level'].value_counts().to_string()}")
-        print(f"\n결과 파일: {result_path}")
-    else:
-        print("결과 파일이 생성되지 않았습니다.")
+    for platform in ["youtube", "dcinside"]:
+        result_path = f"data/processed/{platform}_result.csv"
+        if os.path.exists(result_path):
+            df = pd.read_csv(result_path, encoding="utf-8-sig")
+            print(f"\n[{platform}] 총 {len(df)}건")
+            print(f"유형별:\n{df['rumor_type'].value_counts().sort_index().to_string()}")
+            print(f"위험도별:\n{df['risk_level'].value_counts().to_string()}")
+            print(f"결과 파일: {result_path}")
+        else:
+            print(f"[{platform}] 결과 파일 없음")
 
 if __name__ == "__main__":
     main()

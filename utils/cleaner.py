@@ -1,14 +1,15 @@
 # utils/cleaner.py
-# 중복 제거, 익명화, 컬럼 통일
+# 중복 제거, 익명화, 컬럼 통일 및 플랫폼별 저장
 
+import os
 import hashlib
 import pandas as pd
 
 INPUT_PATH = "data/raw/filtered.csv"
-OUTPUT_PATH = "data/processed/result.csv"
+OUTPUT_DIR = "data/processed"
 
 COLUMNS = ["platform", "collected_at", "post_date", "url",
-           "text", "rumor_type", "keyword_matched", "risk_level"]
+           "text", "rumor_type", "keyword_matched", "rumor_pattern", "risk_level"]
 
 
 def anonymize(text):
@@ -28,7 +29,7 @@ def clean_data():
 
     # URL 기준 중복 제거
     before = len(df)
-    df = df.drop_duplicates(subset=["url", "text"])
+    df = df.drop_duplicates(subset=["url", "rumor_pattern"])
     print(f"  중복 제거: {before - len(df)}건 제거 → {len(df)}건 남음")
 
     # 날짜 형식 통일
@@ -38,7 +39,12 @@ def clean_data():
     # 컬럼 정렬
     df = df.reindex(columns=COLUMNS)
 
-    import os
-    os.makedirs("data/processed", exist_ok=True)
-    df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8-sig")
-    print(f"전처리 완료: {len(df)}건 → {OUTPUT_PATH}")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # 플랫폼별 분리 저장
+    for platform, group in df.groupby("platform"):
+        output_path = f"{OUTPUT_DIR}/{platform}_result.csv"
+        group.to_csv(output_path, index=False, encoding="utf-8-sig")
+        print(f"  저장 완료: {len(group)}건 → {output_path}")
+
+    print(f"전처리 완료: 총 {len(df)}건")
