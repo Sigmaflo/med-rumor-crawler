@@ -1,0 +1,6 @@
+requests
+beautifulsoup4
+selenium
+pandas
+google-api-python-client
+python-dotenv
