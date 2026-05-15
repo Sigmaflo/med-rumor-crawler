@@ -6,6 +6,13 @@ import pandas as pd
 RAW_PATHS = ["data/raw/youtube_raw.csv", "data/raw/dcinside_raw.csv"]
 OUTPUT_PATH = "data/raw/filtered.csv"
 
+# 복약 맥락 필터 — 이 중 하나라도 없으면 제외
+MEDICAL_CONTEXT = [
+    "약", "복용", "먹다", "먹어", "복약",
+    "성분", "용량", "처방", "약물", "약품",
+    "진통제", "항생제", "수면제", "영양제", "보충제"
+]
+
 # 단정 표현 패턴 (루머 포함)
 RUMOR_PATTERNS = [
     "해도 돼", "괜찮아", "된다더라", "보장된다", "무조건",
@@ -25,6 +32,11 @@ RISK_MAP = {
     "4": "중간", "5": "중간", "6": "중간",
     "8": "낮음"
 }
+
+
+def has_medical_context(text):
+    """복약 관련 단어가 하나라도 있는지 확인"""
+    return any(word in text for word in MEDICAL_CONTEXT)
 
 
 def is_rumor(text):
@@ -51,12 +63,24 @@ def filter_rumors():
     df = pd.concat(dfs, ignore_index=True)
     print(f"\n전체 {len(df)}건 로드 완료")
 
-    # 루머 필터링
-    df["is_rumor"] = df["text"].apply(lambda x: is_rumor(str(x)))
-    df = df[df["is_rumor"]].drop(columns=["is_rumor"])
+    # 1차: 복약 맥락 필터
+    before = len(df)
+    df = df[df["text"].apply(lambda x: has_medical_context(str(x)))]
+    print(f"복약 맥락 필터: {before - len(df)}건 제외 → {len(df)}건 남음")
 
-    # 위험도 태깅
-    df["risk_level"] = df["rumor_type"].astype(str).map(RISK_MAP).fillna("미분류")
+    # 2차: 루머 필터링
+    df["is_rumor"] = df["text"].apply(lambda x: is_rumor(str(x)))
+    before = len(df)
+    df = df[df["is_rumor"]].drop(columns=["is_rumor"])
+    print(f"루머 필터: {before - len(df)}건 제외 → {len(df)}건 남음")
+
+    # 위험도 태깅 (float → int → str 변환으로 버그 수정)
+    df["risk_level"] = (
+        df["rumor_type"]
+        .apply(lambda x: str(int(float(x))) if pd.notna(x) and str(x).strip() != "" else "")
+        .map(RISK_MAP)
+        .fillna("미분류")
+    )
 
     df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8-sig")
     print(f"필터링 완료: {len(df)}건 → {OUTPUT_PATH}")
