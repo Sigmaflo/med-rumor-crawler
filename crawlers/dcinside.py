@@ -11,15 +11,12 @@ import requests
 from bs4 import BeautifulSoup
 
 # 테스트 설정
-# SEARCH_KEYWORDS = [
-#     "타이레놀", "감기약", "항생제",
-#     "수면제", "진통제", "다이어트약",
-#     "ADHD약", "영양제", "보충제"
-# ]
 SEARCH_KEYWORDS = [
-    "타이레놀",
-    "감기약",
+    "타이레놀", "감기약", "항생제",
+    "수면제", "진통제", "다이어트약",
+    "ADHD약", "영양제", "보충제"
 ]
+
 TEST_PAGES = 1  # 검색어당 페이지 수
 
 OUTPUT_PATH = "data/raw/dcinside_raw.csv"
