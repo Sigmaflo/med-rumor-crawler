@@ -1,63 +1,45 @@
 # utils/filter.py
-# 루머 키워드 필터링 및 위험도 태깅 (루머 1개 = 1줄)
+# 루머 필터링 — 약품명 + 상황 키워드 조합 방식 (루머 1개 = 1줄)
 
 import pandas as pd
 
 RAW_PATHS = ["data/raw/youtube_raw.csv", "data/raw/dcinside_raw.csv"]
 OUTPUT_PATH = "data/raw/filtered.csv"
 
-# 복약 맥락 필터 — 이 중 하나라도 없으면 제외
-MEDICAL_CONTEXT = [
-    "약", "복용", "먹다", "먹어", "복약",
-    "성분", "용량", "처방", "약물", "약품",
-    "진통제", "항생제", "수면제", "영양제", "보충제"
-]
-
-# 단정 표현 패턴 — 루머 유형 8개에 1:1 매핑
-RUMOR_PATTERNS = {
-    "같이 먹어도":   "1",  # 병용 위험 무시
-    "더 먹어도 돼":  "2",  # 과다복용·오용
-    "약 줘도 돼":    "3",  # 처방약 공유·유통
-    "먹으면 효과":   "4",  # 효능 과장·허위
-    "먹으면 살":     "5",  # 단기 감량·근육
-    "직구 약 좋다":  "6",  # 해외직구·미인증
-    "먹어도 괜찮아": "7",  # 금기 상황 무시
-    "약 대신 먹어":  "8",  # 민간요법·대체
-}
-
-# 단순 질문 패턴 (제외)
-QUESTION_PATTERNS = [
-    "되나요", "괜찮을까요", "추천해주세요", "어떻게 생각",
-    "해도 될까요", "먹어도 될까", "괜찮나요", "어떤가요"
-]
-
-# 검색어 → rumor_type 매핑
-KEYWORD_TYPE_MAP = {
-    # 유튜브 검색어
-    "타이레놀 부작용": "2",
-    "타이레놀 과다복용": "2",
-    "감기약 같이 먹어도": "1",
-    "감기약 술": "1",
-    "항생제 복용": "2",
-    "항생제 남은 약": "2",
-    "수면제 먹어도 돼": "7",
-    "수면제 구하는 법": "3",
-    "다이어트약 효과": "5",
-    "다이어트약 직구": "6",
-    "ADHD약 공유": "3",
-    "진통제 과다복용": "2",
-    "영양제 효과 있다": "4",
-    "보충제 부작용": "6",
-    # 디시인사이드 검색어
-    "타이레놀": "2",
-    "감기약": "1",
-    "항생제": "2",
-    "수면제": "3",
-    "진통제": "2",
-    "다이어트약": "5",
-    "ADHD약": "3",
-    "영양제": "4",
-    "보충제": "6",
+# 유형별 상황 키워드 — 텍스트에 하나라도 포함되면 해당 유형으로 분류
+RUMOR_TYPE_KEYWORDS = {
+    "1": {  # 병용 위험 무시
+        "name": "병용 위험 무시",
+        "keywords": ["술", "커피", "에너지음료", "카페인", "음주", "카페", "홍차", "녹차"],
+    },
+    "2": {  # 과다복용·오용
+        "name": "과다복용·오용",
+        "keywords": ["많이", "두 배", "두배", "쪼개", "여러 개", "여러개", "한꺼번에", "한번에 많이", "과다"],
+    },
+    "3": {  # 처방약 공유·유통
+        "name": "처방약 공유·유통",
+        "keywords": ["나눔", "공유", "빌려", "구함", "구해요", "처방 없이", "처방없이", "무처방"],
+    },
+    "4": {  # 효능 과장·허위
+        "name": "효능 과장·허위",
+        "keywords": ["키 크", "집중력", "성적", "머리 좋", "IQ", "공부", "기억력"],
+    },
+    "5": {  # 단기 감량·근육
+        "name": "단기 감량·근육",
+        "keywords": ["살 빠", "살빠", "다이어트", "체중", "kg 빠", "체지방", "근육"],
+    },
+    "6": {  # 해외직구·미인증
+        "name": "해외직구·미인증",
+        "keywords": ["직구", "해외 구매", "아마존", "iherb", "아이허브", "미인증", "해외직구"],
+    },
+    "7": {  # 금기 상황 무시
+        "name": "금기 상황 무시",
+        "keywords": ["빈속", "임신", "수술 전", "수술전", "운전", "음주 후", "공복"],
+    },
+    "8": {  # 민간요법·대체
+        "name": "민간요법·대체",
+        "keywords": ["대신", "민간", "자연 치료", "식품으로", "음식으로", "한방", "생강", "마늘"],
+    },
 }
 
 # 위험도 매핑
@@ -67,42 +49,46 @@ RISK_MAP = {
     "8": "낮음"
 }
 
+# 검색어 → rumor_type 매핑 (키워드 미매칭 시 보완)
+KEYWORD_TYPE_MAP = {
+    "타이레놀 부작용": "2", "타이레놀 과다복용": "2",
+    "감기약 같이 먹어도": "1", "감기약 술": "1",
+    "항생제 복용": "2", "항생제 남은 약": "2",
+    "수면제 먹어도 돼": "7", "수면제 구하는 법": "3",
+    "다이어트약 효과": "5", "다이어트약 직구": "6",
+    "ADHD약 공유": "3", "진통제 과다복용": "2",
+    "영양제 효과 있다": "4", "보충제 부작용": "6",
+    "타이레놀": "2", "감기약": "1", "항생제": "2",
+    "수면제": "3", "진통제": "2", "다이어트약": "5",
+    "ADHD약": "3", "영양제": "4", "보충제": "6",
+}
 
-def has_medical_context(text):
-    """복약 관련 단어가 하나라도 있는지 확인"""
-    return any(word in text for word in MEDICAL_CONTEXT)
 
-
-def is_question(text):
-    """단순 질문 여부 확인"""
-    return any(p in text for p in QUESTION_PATTERNS)
+def classify_rumor_type(text):
+    """텍스트에서 매칭되는 루머 유형 목록 반환 (유형별 키워드 조합)"""
+    matched = []
+    for rumor_type, info in RUMOR_TYPE_KEYWORDS.items():
+        for kw in info["keywords"]:
+            if kw in text:
+                matched.append((rumor_type, kw))
+                break  # 유형당 1개만
+    return matched
 
 
 def extract_rumor_rows(row):
-    """게시글에서 감지된 루머 패턴별로 행 분리 (루머 1개 = 1줄)"""
+    """게시글에서 유형별로 행 분리 (루머 1개 = 1줄)"""
     text = str(row["text"])
-    if is_question(text):
+    matched_types = classify_rumor_type(text)
+    if not matched_types:
         return []
 
     rows = []
-    for pattern, pattern_type in RUMOR_PATTERNS.items():
-        if pattern in text:
-            new_row = row.to_dict()
-            new_row["rumor_pattern"] = pattern
-            # 패턴에서 rumor_type 직접 결정
-            new_row["rumor_type"] = pattern_type
-            rows.append(new_row)
+    for rumor_type, matched_kw in matched_types:
+        new_row = row.to_dict()
+        new_row["rumor_type"] = rumor_type
+        new_row["rumor_pattern"] = matched_kw
+        rows.append(new_row)
     return rows
-
-
-def normalize_rumor_type(val, keyword):
-    """rumor_type 보완 — 패턴 미매칭 시 검색어로 추론"""
-    if pd.notna(val) and str(val).strip() not in ("", "nan"):
-        try:
-            return str(int(float(val)))
-        except ValueError:
-            pass
-    return KEYWORD_TYPE_MAP.get(str(keyword).strip(), "")
 
 
 def filter_rumors():
@@ -122,12 +108,7 @@ def filter_rumors():
     df = pd.concat(dfs, ignore_index=True)
     print(f"\n전체 {len(df)}건 로드 완료")
 
-    # 1차: 복약 맥락 필터
-    before = len(df)
-    df = df[df["text"].apply(lambda x: has_medical_context(str(x)))]
-    print(f"복약 맥락 필터: {before - len(df)}건 제외 → {len(df)}건 남음")
-
-    # 2차: 루머 패턴별 행 분리 (루머 1개 = 1줄)
+    # 유형별 키워드 조합으로 루머 분류 및 행 분리
     expanded = []
     for _, row in df.iterrows():
         expanded.extend(extract_rumor_rows(row))
@@ -137,12 +118,7 @@ def filter_rumors():
         return
 
     df = pd.DataFrame(expanded)
-    print(f"루머 패턴 분리: {len(df)}줄 생성")
-
-    # rumor_type 정규화
-    df["rumor_type"] = df.apply(
-        lambda row: normalize_rumor_type(row["rumor_type"], row["keyword_matched"]), axis=1
-    )
+    print(f"루머 분류: {len(df)}줄 생성")
 
     # 위험도 태깅
     df["risk_level"] = df["rumor_type"].map(RISK_MAP).fillna("미분류")
