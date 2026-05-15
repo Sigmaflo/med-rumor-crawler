@@ -12,17 +12,27 @@ from googleapiclient.discovery import build
 load_dotenv()
 
 # 테스트 설정
-MAX_VIDEOS_PER_KEYWORD = 3   # 키워드당 영상 수
-MAX_COMMENTS_PER_VIDEO = 10  # 영상당 댓글 수
-TEST_KEYWORD_INDEX = 0       # 유형별 첫 번째 키워드만 사용
+SEARCH_KEYWORDS = [
+    "타이레놀 부작용",
+    "감기약 같이 먹어도",
+    "항생제 복용",
+    "수면제 먹어도 돼",
+    "다이어트약 효과",
+    "ADHD약 공유",
+    "진통제 과다복용",
+    # 추가 7개
+    "타이레놀 과다복용",
+    "감기약 술",
+    "항생제 남은 약",
+    "수면제 구하는 법",
+    "다이어트약 직구",
+    "영양제 효과 있다",
+    "보충제 부작용",
+]
+MAX_VIDEOS_PER_KEYWORD = 6   # 키워드당 영상 수
+MAX_COMMENTS_PER_VIDEO = 50  # 영상당 댓글 수
 
 OUTPUT_PATH = "data/raw/youtube_raw.csv"
-KEYWORDS_PATH = "keywords.json"
-
-
-def load_keywords():
-    with open(KEYWORDS_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 def search_videos(youtube, keyword):
@@ -40,7 +50,7 @@ def search_videos(youtube, keyword):
     return video_ids
 
 
-def fetch_comments(youtube, video_id, keyword, rumor_type):
+def fetch_comments(youtube, video_id, keyword):
     """video_id별 댓글 수집 → 딕셔너리 리스트 반환"""
     results = []
     try:
@@ -59,9 +69,9 @@ def fetch_comments(youtube, video_id, keyword, rumor_type):
                 "post_date": snippet["publishedAt"][:10],
                 "url": f"https://www.youtube.com/watch?v={video_id}",
                 "text": snippet["textDisplay"],
-                "rumor_type": rumor_type,
+                "rumor_type": "",        # filter.py에서 채움
                 "keyword_matched": keyword,
-                "risk_level": "",  # filter.py에서 채움
+                "risk_level": "",        # filter.py에서 채움
             })
     except Exception as e:
         print(f"  댓글 수집 실패 (video_id={video_id}): {e}")
@@ -76,21 +86,17 @@ def crawl_youtube():
         return
 
     youtube = build("youtube", "v3", developerKey=api_key)
-    keywords = load_keywords()
-
     all_rows = []
 
-    for rumor_type, keyword_list in keywords.items():
-        keyword = keyword_list[TEST_KEYWORD_INDEX]  # 유형별 첫 번째 키워드만
-        print(f"\n[유형 {rumor_type}] 키워드: {keyword}")
-
+    for keyword in SEARCH_KEYWORDS:
+        print(f"\n[검색어: {keyword}]")
         video_ids = search_videos(youtube, keyword)
 
         for video_id in video_ids:
-            comments = fetch_comments(youtube, video_id, keyword, rumor_type)
+            comments = fetch_comments(youtube, video_id, keyword)
             all_rows.extend(comments)
             print(f"  video_id={video_id} → 댓글 {len(comments)}개 수집")
-            time.sleep(1)  # API 요청 간 딜레이
+            time.sleep(1)
 
     # CSV 저장
     os.makedirs("data/raw", exist_ok=True)
